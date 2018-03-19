@@ -865,6 +865,8 @@ void t_cocoarealm_generator::generate_cocoa_struct_implementation(ofstream& out,
                                                              bool is_exception,
                                                              bool is_result,
                                                              t_service* service) {
+  bool id_field_exist = false;
+
   indent(out) << "@implementation " << cocoa_prefix_;
 
   if (service)
@@ -875,7 +877,9 @@ void t_cocoarealm_generator::generate_cocoa_struct_implementation(ofstream& out,
   const vector<t_field*>& synthesize_members = tstruct->get_members();  
   vector<t_field*>::const_iterator m_synthesize_iter;
   for (m_synthesize_iter = synthesize_members.begin(); m_synthesize_iter != synthesize_members.end(); ++m_synthesize_iter) {
-    out << "@synthesize " << (*m_synthesize_iter)->get_name() << " = __"<< (*m_synthesize_iter)->get_name() << ";" << endl;
+    string field_name = (*m_synthesize_iter)->get_name();
+    out << "@synthesize " << field_name << " = __"<< field_name << ";" << endl;
+    out << "@synthesize " << field_name << "_isset" << " = __" << field_name << "_isset" << ";" << endl << endl;
   }
   out<<endl;
 
@@ -902,6 +906,7 @@ void t_cocoarealm_generator::generate_cocoa_struct_implementation(ofstream& out,
       out << "#if TARGET_OS_IPHONE || (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)"
           << endl;
       for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
+        if ((*m_iter)->get_name() == "id") id_field_exist = true;
         t_type* t = get_true_type((*m_iter)->get_type());
         if ((*m_iter)->get_value() != NULL) {
           print_const_value(out,
@@ -984,6 +989,12 @@ void t_cocoarealm_generator::generate_cocoa_struct_implementation(ofstream& out,
   }
   generate_cocoa_struct_validator(out, tstruct);
   generate_cocoa_struct_description(out, tstruct);
+
+  if (id_field_exist) {
+      out << "+ (NSString *)primaryKey {" << endl 
+      << "  return @\"id\";" << endl 
+      << "}" << endl << endl;
+  }
 
   out << "@end" << endl << endl;
 }
@@ -1107,7 +1118,7 @@ void t_cocoarealm_generator::generate_cocoa_struct_writer(ofstream& out, t_struc
   out << indent() << "[outProtocol writeStructBeginWithName: @\"" << name << "\"];" << endl;
 
   for (f_iter = fields.begin(); f_iter != fields.end(); ++f_iter) {
-    out << indent() << "if (__" << (*f_iter)->get_name() << "_isset) {" << endl;
+    out << indent() << "if (self." << (*f_iter)->get_name() << "_isset) {" << endl;
     indent_up();
     bool null_allowed = type_can_be_null((*f_iter)->get_type());
     if (null_allowed) {
@@ -2584,7 +2595,7 @@ string t_cocoarealm_generator::rlmarray_base_type_name(t_base_type* type, bool p
   case t_base_type::TYPE_I8:
     return "RLMInt";
   case t_base_type::TYPE_I16:
-    return "RLMIntt";
+    return "RLMInt";
   case t_base_type::TYPE_I32:
     return "RLMInt";
   case t_base_type::TYPE_I64:
@@ -2916,7 +2927,9 @@ string t_cocoarealm_generator::declare_property(t_field* tfield, bool is_savable
   render << "getter=" << decapitalize(tfield->get_name()) << ", setter=set"
          << capitalize(tfield->get_name()) + ":) " << type_name(tfield->get_type(), is_savable, NULL, false) << " "
          << tfield->get_name() << ";";
-
+  render << "\n";
+  render << "@property BOOL " << tfield->get_name() << "_isset;";
+  
   return render.str();
 }
 
