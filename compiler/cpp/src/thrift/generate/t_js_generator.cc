@@ -1615,7 +1615,7 @@ void t_js_generator::generate_service_client(t_service* tservice) {
       indent_down();
       f_service_ << indent() << "}" << endl;
       f_service_ << indent() << "this.output.getTransport().write(packet);" << endl;
-      f_service_ << indent() << "this.output.getTransport().flush();" << endl;
+      f_service_ << indent() << "this.output.getTransport().flush(seqId,callback);" << endl;
     } else {
       if (gen_jquery_) {
         f_service_ << indent() << "return this.output.getTransport().flush(callback);" << endl;
