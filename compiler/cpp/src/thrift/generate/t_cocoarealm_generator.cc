@@ -584,7 +584,7 @@ void t_cocoarealm_generator::generate_cocoa_struct_interface(ofstream& out,
   generate_cocoa_struct_field_accessor_declarations(out, tstruct, is_exception);
 
   out << "@end" << endl;
-  out << "RLM_ARRAY_TYPE(" << tstruct->get_name() << ")" << endl << endl;
+  out << "RLM_ARRAY_TYPE(" << cocoa_prefix_ << tstruct->get_name() << ")" << endl << endl;
 }
 
 /**
