@@ -377,7 +377,7 @@ void t_cocoarealm_generator::generate_typedef(t_typedef* ttypedef) {
  * @param tenum The enumeration
  */
 void t_cocoarealm_generator::generate_enum(t_enum* tenum) {
-  f_header_ << indent() << "enum " << cocoa_prefix_ << tenum->get_name() << " {" << endl;
+  f_header_ << indent() << "typedef NS_ENUM(NSUInteger, " << cocoa_prefix_ << tenum->get_name() << ") {" << endl;
   indent_up();
 
   vector<t_enum_value*> constants = tenum->get_constants();
@@ -389,7 +389,7 @@ void t_cocoarealm_generator::generate_enum(t_enum* tenum) {
     } else {
       f_header_ << "," << endl;
     }
-    f_header_ << indent() << tenum->get_name() << "_" << (*c_iter)->get_name();
+    f_header_ << indent() << (*c_iter)->get_name();
     f_header_ << " = " << (*c_iter)->get_value();
   }
 
