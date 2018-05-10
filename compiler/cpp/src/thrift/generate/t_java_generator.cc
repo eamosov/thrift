@@ -444,7 +444,7 @@ public:
 	  return replace_all(replace_all(str, "\n", "\\n"), "\"", "\\\"");
   }
 
-  void generate_java_ann_doc(std::ofstream& out, t_doc* tdoc);
+  void generate_java_ann_doc(std::ostream& out, t_doc* tdoc);
 
 private:
   /**
@@ -5653,7 +5653,7 @@ void t_java_generator::generate_javax_generated_annotation(ostream& out) {
   }
 }
 
-void t_java_generator::generate_java_ann_doc(std::ofstream& out, t_doc* tdoc) {
+void t_java_generator::generate_java_ann_doc(std::ostream& out, t_doc* tdoc) {
   if (use_tdoc_ && tdoc->has_doc()) {
 	indent(out) << "@org.apache.thrift.TDoc(\"" + replace_endl(tdoc->get_doc()) + "\")" << std::endl;
   }
