@@ -87,6 +87,7 @@ public:
 
   void generate_typedef(t_typedef* ttypedef);
   void generate_enum(t_enum* tenum);
+  void generateEnumFunctions(t_enum* tenum);
   void generate_struct(t_struct* tstruct);
   void generate_xception(t_struct* txception);
   void generate_service(t_service* tservice);
@@ -392,9 +393,44 @@ void t_cocoarealm_generator::generate_enum(t_enum* tenum) {
     f_header_ << indent() << tenum->get_name() << "_" << (*c_iter)->get_name();
     f_header_ << " = " << (*c_iter)->get_value();
   }
+  f_header_ << "," << endl << indent() << tenum->get_name() << "_count";
 
   indent_down();
   f_header_ << endl << "};" << endl << endl;
+
+  generateEnumFunctions(tenum);
+}
+
+void t_cocoarealm_generator::generateEnumFunctions(t_enum* tenum) {
+  string lower_cased_name = tenum -> get_name();
+  lower_cased_name[0] =  tolower(lower_cased_name[0]);
+
+  f_header_ << "NSString* " << lower_cased_name << "ToString(" << cocoa_prefix_ << tenum -> get_name() << " elem);" << endl;
+  f_header_ << cocoa_prefix_ << tenum -> get_name() << " stringTo" << tenum -> get_name() << "(NSString* string);" << endl << endl;
+
+  f_impl_ << "NSString* " << lower_cased_name << "ToString(" << cocoa_prefix_ << tenum -> get_name() << " elem) {" << endl;
+  indent_up();
+  f_impl_ << "  switch (elem) {" << endl;
+  indent_up();
+  vector<t_enum_value*> constants = tenum->get_constants();
+  vector<t_enum_value*>::iterator c_iter;
+  for (c_iter = constants.begin(); c_iter != constants.end(); ++c_iter) {
+    indent(f_impl_) << "case " << tenum->get_name() << "_" << (*c_iter)->get_name() << ": return @\"" << (*c_iter)->get_name() << "\";" << endl;
+  }
+  indent(f_impl_) << "default: return @\"Invalid element\";" << endl;
+  indent_down();
+  indent(f_impl_) << "}" << endl;
+  indent_down();
+  f_impl_ << "}" << endl << endl;
+
+  f_impl_ << cocoa_prefix_ << tenum -> get_name() << " stringTo" << tenum -> get_name() << "(NSString* string) {" << endl;
+  indent_up();
+  for (c_iter = constants.begin(); c_iter != constants.end(); ++c_iter) {
+    indent(f_impl_) << "if ([string isEqualToString:@\"" << (*c_iter)->get_name() << "\"]) return " << tenum->get_name() << "_" << (*c_iter)->get_name() << ";" << endl;
+  }
+  indent(f_impl_) << "return -1;" << endl;
+  indent_down();
+  f_impl_ << "}" << endl << endl << endl;
 }
 
 /**
