@@ -107,7 +107,7 @@ public:
   void generate_cocoa_struct_interface(std::ofstream& out,
                                        bool is_savable,
                                        t_struct* tstruct,
-                                       bool is_xception = false,
+                                       bool is_exception = false,
                                        t_service* service = NULL);
   void generate_cocoa_struct_implementation(std::ofstream& out,
                                             bool is_savable,
@@ -2278,6 +2278,7 @@ void t_cocoarealm_generator::generate_deserialize_list_element(ofstream& out,
   if (fieldName == "key_value_pair.value" || fieldName == "key_value_pair.key") {
     indent(out) << "[" << fieldName << " addObject: " << containerize(type, elem) << "];" << endl;
   } else {
+    indent(out) << "if (self." << fieldName << " == nil) { self." << fieldName << " = [NSMutableArray new]; }" << endl;
     indent(out) << "[self." << fieldName << " addObject: " << containerize(type, elem) << "];" << endl;
   }
 }
