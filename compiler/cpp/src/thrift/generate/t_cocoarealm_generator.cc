@@ -2209,7 +2209,7 @@ string t_cocoarealm_generator::containerize(t_type* ttype, string fieldName) {
       case t_base_type::TYPE_I64:
       return "[NSNumber numberWithLongLong: " + fieldName + "]";
       case t_base_type::TYPE_DOUBLE:
-      return "[NSNumber numberWithDouble: " + fieldName + "]";
+      return fieldName;
       default:
         break;
     }
@@ -2638,7 +2638,7 @@ string t_cocoarealm_generator::rlmarray_base_type_name(t_base_type* type, bool p
   case t_base_type::TYPE_I64:
     return "RLMInt";
   case t_base_type::TYPE_DOUBLE:
-    return "double";
+    return "RLMDouble";
   default:
     throw "compiler error: no Objective-C name for base type " + t_base_type::t_base_name(tbase);
   }
