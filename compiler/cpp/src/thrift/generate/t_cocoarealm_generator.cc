@@ -963,39 +963,6 @@ void t_cocoarealm_generator::generate_cocoa_struct_implementation(ofstream& out,
     out << endl;
   }
 
-  // // initializer with all fields as params
-  // if (!members.empty()) {
-  //   generate_cocoa_struct_initializer_signature(out, tstruct);
-  //   out << endl;
-  //   scope_up(out);
-  //   if (is_exception) {
-  //     out << indent() << "self = [self init];" << endl;
-  //   } else {
-  //     out << indent() << "self = [super init];" << endl;
-  //   }
-
-  //   for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
-  //     t_type* t = get_true_type((*m_iter)->get_type());
-  //     out << indent() << "__" << (*m_iter)->get_name() << " = ";
-  //     if (type_can_be_null(t)) {
-  //       out << "[" << (*m_iter)->get_name() << " retain_stub];" << endl;
-  //     } else {
-  //       out << (*m_iter)->get_name() << ";" << endl;
-  //     }
-  //     out << indent() << "__" << (*m_iter)->get_name() << "_isset = YES;" << endl;
-  //   }
-
-  //   out << indent() << "return self;" << endl;
-  //   scope_down(out);
-  //   out << endl;
-  // }
-
-  // initWithCoder for NSCoding
-  // generate_cocoa_struct_init_with_coder_method(out, tstruct, is_exception);
-  // encodeWithCoder for NSCoding
-  // generate_cocoa_struct_encode_with_coder_method(out, tstruct, is_exception);
-  // hash and isEqual for NSObject
-  // generate_cocoa_struct_hash_method(out, tstruct);
   generate_cocoa_struct_is_equal_method(out, tstruct, service);
 
   // dealloc
@@ -1013,7 +980,7 @@ void t_cocoarealm_generator::generate_cocoa_struct_implementation(ofstream& out,
     out << indent() << "[super dealloc_stub];" << endl;
     scope_down(out);
     out << endl;
-  }
+    }
 
   // the rest of the methods
   generate_cocoa_struct_field_accessor_implementations(out, tstruct, is_exception);
@@ -2239,6 +2206,7 @@ void t_cocoarealm_generator::generate_deserialize_map_element(ofstream& out,
   generate_deserialize_field(out, &fkey, tstruct, "key_value_pair.key", true);
   generate_deserialize_field(out, &fval, tstruct, "key_value_pair.value", true);
 
+  indent(out) << "if (self." << tfield->get_name() << " == nil) { self." << tfield->get_name() << " = [NSMutableArray new]; }" << endl;
   indent(out) << "[self." << tfield->get_name() << " addObject: key_value_pair];" << endl;
 }
 
@@ -2258,6 +2226,7 @@ void t_cocoarealm_generator::generate_deserialize_set_element(ofstream& out,
   if (fieldName == "key_value_pair.value" || fieldName == "key_value_pair.key") {
     indent(out) << "[" << fieldName << " addObject: " << containerize(type, elem) << "];" << endl;
   } else {
+    indent(out) << "if (self." << fieldName << " == nil) { self." << fieldName << " = [NSMutableArray new]; }" << endl;
     indent(out) << "[self." << fieldName << " addObject: " << containerize(type, elem) << "];" << endl;
   }
 }
@@ -3039,30 +3008,30 @@ string t_cocoarealm_generator::type_to_enum(t_type* type) {
     case t_base_type::TYPE_VOID:
       throw "NO T_VOID CONSTRUCT";
     case t_base_type::TYPE_STRING:
-      return "TType_STRING";
+      return cocoa_prefix_ + "Type_STRING";
     case t_base_type::TYPE_BOOL:
-      return "TType_BOOL";
+      return cocoa_prefix_ + "Type_BOOL";
     case t_base_type::TYPE_I8:
-      return "TType_BYTE";
+      return cocoa_prefix_ + "Type_BYTE";
     case t_base_type::TYPE_I16:
-      return "TType_I16";
+      return cocoa_prefix_ + "Type_I16";
     case t_base_type::TYPE_I32:
-      return "TType_I32";
+      return cocoa_prefix_ + "Type_I32";
     case t_base_type::TYPE_I64:
-      return "TType_I64";
+      return cocoa_prefix_ + "Type_I64";
     case t_base_type::TYPE_DOUBLE:
-      return "TType_DOUBLE";
+      return cocoa_prefix_ + "Type_DOUBLE";
     }
   } else if (type->is_enum()) {
-    return "TType_I32";
+    return cocoa_prefix_ + "Type_I32";
   } else if (type->is_struct() || type->is_xception()) {
-    return "TType_STRUCT";
+    return cocoa_prefix_ + "Type_STRUCT";
   } else if (type->is_map()) {
-    return "TType_MAP";
+    return cocoa_prefix_ + "Type_MAP";
   } else if (type->is_set()) {
-    return "TType_SET";
+    return cocoa_prefix_ + "Type_SET";
   } else if (type->is_list()) {
-    return "TType_LIST";
+    return cocoa_prefix_ + "Type_LIST";
   }
 
   throw "INVALID TYPE IN type_to_enum: " + type->get_name();
