@@ -2013,7 +2013,7 @@ void t_java_generator::generate_java_struct_equality(ostream& out, t_struct* tst
     string that_present = "true";
     string unequal;
 
-    if (is_optional || can_be_null) {
+    if (is_optional || can_be_null || defoptional_) {
       this_present += " && this." + generate_isset_check(*m_iter);
       that_present += " && that." + generate_isset_check(*m_iter);
     }
