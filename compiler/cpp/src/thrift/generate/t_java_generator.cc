@@ -75,6 +75,10 @@ public:
     rethrow_unhandled_exceptions_ = false;
     unsafe_binaries_ = false;
     use_tdoc_ = false;
+    no_async_ = false;
+    no_server_ = false;
+    no_client_ = false;
+    kotlin_ = false;
 
     for( iter = parsed_options.begin(); iter != parsed_options.end(); ++iter) {
       if( iter->first.compare("beans") == 0) {
@@ -112,7 +116,15 @@ public:
       } else if( iter->first.compare("unsafe_binaries") == 0) {
         unsafe_binaries_ = true;
       } else if( iter->first.compare("use_tdoc") == 0) {
-    	  use_tdoc_ = true;
+    	 use_tdoc_ = true;
+      } else if( iter->first.compare("no_async") == 0) {
+         no_async_ = true;
+      } else if( iter->first.compare("no_server") == 0) {
+         no_server_ = true;
+      } else if( iter->first.compare("no_client") == 0) {
+         no_client_ = true;
+      } else if( iter->first.compare("kotlin") == 0) {
+         kotlin_ = true;
       } else {
         throw "unknown option java:" + iter->first;
       }
@@ -354,6 +366,16 @@ public:
   std::string make_valid_java_filename(std::string const& fromName);
   std::string make_valid_java_identifier(std::string const& fromName);
 
+
+  //kotlin stuff
+  void generate_service_kotlin(t_service* tservice);
+  void generate_service_kotlin_interface(t_service* tservice);
+  std::string type_name_kotlin(t_type* ttype);
+  std::string base_type_name_kotlin(t_base_type* tbase);
+  void generate_function_signature_kotlin(t_function* tfunction, std::string prefix = "");
+  std::string kotlin_argument_list(t_struct* tstruct, bool include_types = true);
+
+
   bool type_can_be_null(t_type* ttype) {
     ttype = get_true_type(ttype);
 
@@ -471,6 +493,10 @@ private:
   bool rethrow_unhandled_exceptions_;
   bool unsafe_binaries_;
   bool use_tdoc_;
+  bool no_async_;
+  bool no_server_;
+  bool no_client_;
+  bool kotlin_;
 };
 
 /**
@@ -1753,7 +1779,7 @@ void t_java_generator::generate_java_struct_definition(ostream& out,
   generate_java_struct_write_object(out, tstruct);
   generate_java_struct_read_object(out, tstruct);
 
-  generate_java_struct_standard_scheme(out, tstruct, is_result);
+  //generate_java_struct_standard_scheme(out, tstruct, is_result);
   generate_java_struct_tryload_scheme(out, tstruct, is_result);
   generate_java_struct_tuple_scheme(out, tstruct);
   generate_java_scheme_lookup(out);
@@ -2939,16 +2965,32 @@ void t_java_generator::generate_service(t_service* tservice) {
 
   // Generate the three main parts of the service
   generate_service_interface(tservice);
-  generate_service_async_interface(tservice);
-  generate_service_client(tservice);
-  generate_service_async_client(tservice);
-  generate_service_server(tservice);
-  generate_service_async_server(tservice);
-  generate_service_helpers(tservice);
+  if (!no_async_){
+    generate_service_async_interface(tservice);
+  }
 
+  if (!no_client_){
+    generate_service_client(tservice);
+    if (!no_async_){
+      generate_service_async_client(tservice);
+    }
+  }
+
+  if (!no_server_){
+    generate_service_server(tservice);
+    if (!no_async_){
+      generate_service_async_server(tservice);
+    }
+  }
+
+  generate_service_helpers(tservice);
   indent_down();
   f_service_ << "}" << endl;
   f_service_.close();
+
+  if (kotlin_){
+    generate_service_kotlin(tservice);
+  }
 }
 
 /**
@@ -5659,6 +5701,150 @@ void t_java_generator::generate_java_ann_doc(std::ostream& out, t_doc* tdoc) {
 	indent(out) << "@org.apache.thrift.TDoc(\"" + replace_endl(tdoc->get_doc()) + "\")" << std::endl;
   }
 }
+
+// kotlin stuff
+
+string t_java_generator::base_type_name_kotlin(t_base_type* type) {
+  t_base_type::t_base tbase = type->get_base();
+
+  switch (tbase) {
+  case t_base_type::TYPE_VOID:
+    return "Unit";
+  case t_base_type::TYPE_STRING:
+    if (type->is_binary()) {
+      return "ByteArray";
+    } else {
+      return "String";
+    }
+  case t_base_type::TYPE_BOOL:
+    return "Boolean";
+  case t_base_type::TYPE_I8:
+    return "Byte";
+  case t_base_type::TYPE_I16:
+    return "Short";
+  case t_base_type::TYPE_I32:
+    return "Int";
+  case t_base_type::TYPE_I64:
+    return "Long";
+  case t_base_type::TYPE_DOUBLE:
+    return "Double";
+  default:
+    throw "compiler error: no Java name for base type " + t_base_type::t_base_name(tbase);
+  }
+}
+
+string t_java_generator::type_name_kotlin(t_type* ttype) {
+  // In Java typedefs are just resolved to their real type
+  ttype = get_true_type(ttype);
+  string prefix;
+
+  if (ttype->is_base_type()) {
+      return base_type_name_kotlin((t_base_type*)ttype);
+  } else if (ttype->is_map()) {
+    t_map* tmap = (t_map*)ttype;
+    return "Map<" + type_name_kotlin(tmap->get_key_type()) + "," + type_name_kotlin(tmap->get_val_type()) + ">";
+  } else if (ttype->is_set()) {
+    t_set* tset = (t_set*)ttype;
+    return "Set<" + type_name_kotlin(tset->get_elem_type()) + ">";
+  } else if (ttype->is_list()) {
+    t_list* tlist = (t_list*)ttype;
+    return "List<" + type_name_kotlin(tlist->get_elem_type()) + ">";
+  }
+
+  // Check for namespacing
+  t_program* program = ttype->get_program();
+  if ((program != NULL) && (program != program_)) {
+    string package = program->get_namespace("java");
+    if (!package.empty()) {
+      return package + "." + ttype->get_name();
+    }
+  }
+
+  return ttype->get_name();
+}
+
+void t_java_generator::generate_service_kotlin(t_service* tservice) {
+  string f_service_name = package_dir_ + "/" + make_valid_java_filename(service_name_) + ".kt";
+  f_service_.open(f_service_name.c_str());
+  f_service_ << autogen_comment();
+  f_service_ << "package " << package_name_ << endl << endl;
+
+  if (!suppress_generated_annotations_) {
+    generate_javax_generated_annotation(f_service_);
+  }
+  f_service_ << "@Suppress(\"PLATFORM_CLASS_MAPPED_TO_KOTLIN\")" << endl;
+  f_service_ << "@JvmSuppressWildcards(suppress = true)" << endl;
+  generate_service_kotlin_interface(tservice);
+  f_service_.close();
+}
+
+/**
+ * Generates a service interface definition.
+ *
+ * @param tservice The service to generate a header definition for
+ */
+void t_java_generator::generate_service_kotlin_interface(t_service* tservice) {
+  string extends = "";
+  string extends_iface = "";
+  if (tservice->get_extends() != NULL) {
+    extends = type_name(tservice->get_extends());
+    extends_iface = " : " + extends + ".Iface";
+  }
+
+  generate_java_doc(f_service_, tservice);
+  generate_java_ann_doc(f_service_, tservice);
+  f_service_ << indent() << "interface " << service_name_ << "Iface" << extends_iface << " {" << endl << endl;
+  indent_up();
+  vector<t_function*> functions = tservice->get_functions();
+  vector<t_function*>::iterator f_iter;
+  for (f_iter = functions.begin(); f_iter != functions.end(); ++f_iter) {
+    generate_java_doc(f_service_, *f_iter);
+    generate_java_ann_doc(f_service_, *f_iter);
+    generate_function_signature_kotlin(*f_iter);
+  }
+  indent_down();
+  f_service_ << indent() << "}" << endl << endl;
+}
+
+void t_java_generator::generate_function_signature_kotlin(t_function* tfunction, string prefix) {
+  t_type* ttype = tfunction->get_returntype();
+  std::string fn_name = get_rpc_method_name(tfunction->get_name());
+  std::string result =  "@Throws(";
+  t_struct* xs = tfunction->get_xceptions();
+  const std::vector<t_field*>& xceptions = xs->get_members();
+  vector<t_field*>::const_iterator x_iter;
+  for (x_iter = xceptions.begin(); x_iter != xceptions.end(); ++x_iter) {
+    result += type_name_kotlin((*x_iter)->get_type()) + "::class, ";
+  }
+  result += "org.apache.thrift.TException::class)";
+  indent(f_service_) << result << endl;
+  indent(f_service_) <<  "suspend fun " + prefix + fn_name + "(" + kotlin_argument_list(tfunction->get_arglist()) + "): " + type_name_kotlin(ttype) << endl;
+}
+
+string t_java_generator::kotlin_argument_list(t_struct* tstruct, bool include_types) {
+  string result = "";
+
+  const vector<t_field*>& fields = tstruct->get_members();
+  vector<t_field*>::const_iterator f_iter;
+  bool first = true;
+  for (f_iter = fields.begin(); f_iter != fields.end(); ++f_iter) {
+    if (first) {
+      first = false;
+    } else {
+      result += ", ";
+    }
+    result += (*f_iter)->get_name();
+    if (include_types) {
+      result += ": " + type_name_kotlin((*f_iter)->get_type());
+      if (!(*f_iter)->get_type()->is_base_type() || ((t_base_type*)(*f_iter)->get_type())->get_base() == t_base_type::TYPE_STRING){
+        result += "?";
+      }
+    }
+    result += " ";
+  }
+  return result;
+}
+
 
 THRIFT_REGISTER_GENERATOR(
     java,
