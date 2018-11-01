@@ -5,7 +5,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.apache</groupId>
 	<artifactId>thrift</artifactId>
-	<version>21.10.18</version>
+	<version>01.11.18</version>
 	
 	<properties>
 		<github.global.server>github</github.global.server>		
