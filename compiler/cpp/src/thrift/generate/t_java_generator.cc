@@ -116,15 +116,15 @@ public:
       } else if( iter->first.compare("unsafe_binaries") == 0) {
         unsafe_binaries_ = true;
       } else if( iter->first.compare("use_tdoc") == 0) {
-    	 use_tdoc_ = true;
+        use_tdoc_ = true;
       } else if( iter->first.compare("no_async") == 0) {
-         no_async_ = true;
+        no_async_ = true;
       } else if( iter->first.compare("no_server") == 0) {
-         no_server_ = true;
+        no_server_ = true;
       } else if( iter->first.compare("no_client") == 0) {
-         no_client_ = true;
+        no_client_ = true;
       } else if( iter->first.compare("kotlin") == 0) {
-         kotlin_ = true;
+        kotlin_ = true;
       } else {
         throw "unknown option java:" + iter->first;
       }
@@ -264,14 +264,17 @@ public:
   void generate_deserialize_field(std::ostream& out,
                                   t_field* tfield,
                                   std::string prefix = "",
-                                  bool has_metadata = true);
+                                  bool has_metadata = true,
+                                  bool use_setter = false);
 
-  void generate_deserialize_struct(std::ostream& out, t_struct* tstruct, std::string prefix = "");
+  void generate_deserialize_struct(std::ostream& out, t_struct* tstruct, std::string prefix, t_field* tfield, bool use_setter = false);
 
   void generate_deserialize_container(std::ostream& out,
                                       t_type* ttype,
-                                      std::string prefix = "",
-                                      bool has_metadata = true);
+                                      std::string prefix,
+                                      t_field* tfield,
+                                      bool has_metadata = true,
+                                      bool use_setter = false);
 
   void generate_deserialize_set_element(std::ostream& out,
                                         t_set* tset,
@@ -294,7 +297,8 @@ public:
   void generate_serialize_field(std::ostream& out,
                                 t_field* tfield,
                                 std::string prefix = "",
-                                bool has_metadata = true);
+                                bool has_metadata = true,
+                                bool use_getter = false);
 
   void generate_serialize_struct(std::ostream& out, t_struct* tstruct, std::string prefix = "");
 
@@ -1034,9 +1038,9 @@ void t_java_generator::generate_union_constructor(ostream& out, t_struct* tstruc
                   << endl;
       indent(out) << "  x.set" << get_cap_name((*m_iter)->get_name());
       if(unsafe_binaries_) {
-        indent(out) << "(java.nio.ByteBuffer.wrap(value));" << endl;
+        indent(out) << "(value);" << endl;
       }else{
-        indent(out) << "(java.nio.ByteBuffer.wrap(value.clone()));" << endl;
+        indent(out) << "(value.clone());" << endl;
       }
       indent(out) << "  return x;" << endl;
       indent(out) << "}" << endl << endl;
@@ -1070,24 +1074,24 @@ void t_java_generator::generate_union_getters_and_setters(ostream& out, t_struct
       indent(out) << "public byte[] get" << cap_name << "() {" << endl;
       indent(out) << "  set" << cap_name << "(org.apache.thrift.TBaseHelper.rightSize(buffer"
                   << get_cap_name("for") << cap_name << "()));" << endl;
-      indent(out) << "  java.nio.ByteBuffer b = buffer" << get_cap_name("for") << cap_name << "();" << endl;
+      indent(out) << "  byte[] b = buffer" << get_cap_name("for") << cap_name << "();" << endl;
       indent(out) << "  return b == null ? null : b.array();" << endl;
       indent(out) << "}" << endl;
 
       out << endl;
 
-      indent(out) << "public java.nio.ByteBuffer buffer" << get_cap_name("for")
+      indent(out) << "public byte[] buffer" << get_cap_name("for")
                   << get_cap_name(field->get_name()) << "() {" << endl;
       indent(out) << "  if (getSetField() == _Fields." << constant_name(field->get_name()) << ") {"
                   << endl;
 
       if(unsafe_binaries_){
         indent(out)
-          << "    return (java.nio.ByteBuffer)getFieldValue();"
+          << "    return (byte[])getFieldValue();"
           << endl;
       }else{
         indent(out)
-          << "    return org.apache.thrift.TBaseHelper.copyBinary((java.nio.ByteBuffer)getFieldValue());"
+          << "    return ((byte[])getFieldValue()).clone();"
           << endl;
       }
 
@@ -1128,9 +1132,9 @@ void t_java_generator::generate_union_getters_and_setters(ostream& out, t_struct
       indent(out) << "  set" << get_cap_name(field->get_name());
 
       if(unsafe_binaries_){
-        indent(out) << "(java.nio.ByteBuffer.wrap(value));" << endl;
+        indent(out) << "(value);" << endl;
       }else{
-        indent(out) << "(java.nio.ByteBuffer.wrap(value.clone()));" << endl;
+        indent(out) << "(value.clone());" << endl;
       }
 
       indent(out) << "}" << endl;
@@ -1663,21 +1667,19 @@ void t_java_generator::generate_java_struct_definition(ostream& out,
     for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
       if ((*m_iter)->get_req() != t_field::T_OPTIONAL) {
         t_type* type = get_true_type((*m_iter)->get_type());
+
+        indent(out) << "this.set" << get_cap_name((*m_iter)->get_name()) << "(";
+
         if (type->is_binary()) {
           if(unsafe_binaries_){
-            indent(out) << "this." << (*m_iter)->get_name()
-                        << " = " << (*m_iter)->get_name()
-                        << ";" << endl;
+            out << (*m_iter)->get_name();
           }else{
-            indent(out) << "this." << (*m_iter)->get_name()
-                        << " = org.apache.thrift.TBaseHelper.copyBinary(" << (*m_iter)->get_name()
-                        << ");" << endl;
+            out << "org.apache.thrift.TBaseHelper.copyBinary(" << (*m_iter)->get_name() << ")";
           }
         } else {
-          indent(out) << "this." << (*m_iter)->get_name() << " = " << (*m_iter)->get_name() << ";"
-                      << endl;
+          indent(out) << (*m_iter)->get_name();
         }
-        generate_isset_set(out, (*m_iter), "");
+        out << ");" << endl;
       }
     }
 
@@ -1717,30 +1719,25 @@ void t_java_generator::generate_java_struct_definition(ostream& out,
     t_field* field = (*m_iter);
     std::string field_name = field->get_name();
     t_type* type = field->get_type()->get_true_type();
-    bool can_be_null = type_can_be_null(type);
 
-    if (can_be_null) {
-      indent(out) << "if (other." << generate_isset_check(field) << ") {" << endl;
-      indent_up();
-    }
+    indent(out) << "if (other." << generate_isset_check(field) << ") {" << endl;
+    indent_up();
 
     if (type->is_container()) {
-      generate_deep_copy_container(out, "other", field_name, "__this__" + field_name, type);
-      indent(out) << "this." << field_name << " = __this__" << field_name << ";" << endl;
+      generate_deep_copy_container(out, "other", generate_getter(field), "__this__" + field_name, type);
+      indent(out) << "this.set" << get_cap_name(field_name) << "(__this__" << field_name << ");" << endl;
     } else {
-      indent(out) << "this." << field_name << " = ";
-      generate_deep_copy_non_container(out, "other." + field_name, field_name, type);
-      out << ";" << endl;
+      indent(out) << "this.set" << get_cap_name(field_name) << "(";
+      generate_deep_copy_non_container(out, "other." + generate_getter(*m_iter), field_name, type);
+      out << ");" << endl;
     }
 
-    if (can_be_null) {
-      indent_down();
-      indent(out) << "}else{" << endl;
-      indent_up();
-      indent(out) << "this." << field_name << " = null;" << endl;
-      indent_down();
-      indent(out) << "}" << endl;
-    }
+    indent_down();
+    indent(out) << "}else{" << endl;
+    indent_up();
+    indent(out) << "this.unset" << get_cap_name(field_name) << "();" << endl;
+    indent_down();
+    indent(out) << "}" << endl;
   }
   indent_down();
   indent(out) << "}" << endl << endl;
@@ -1945,7 +1942,7 @@ void t_java_generator::generate_java_struct_parcelable(ostream& out, t_struct* t
       if (bt->is_binary()) {
         indent(out) << "if(in.readInt()==1) {" << endl;
         indent_up();
-        indent(out) << prefix << " = java.nio.ByteBuffer.wrap(in.createByteArray());" << endl;
+        indent(out) << prefix << " = in.createByteArray();" << endl;
         scope_down(out);
       } else {
         switch (bt->get_base()) {
@@ -2054,11 +2051,11 @@ void t_java_generator::generate_java_struct_equality(ostream& out, t_struct* tst
         << "  return false;" << endl;
 
     if (t->is_binary()) {
-      unequal = "!this." + name + ".equals(that." + name + ")";
+      unequal = "!this." + generate_getter(*m_iter) + ".equals(that." + generate_getter(*m_iter) + ")";
     } else if (can_be_null) {
-      unequal = "!this." + name + ".equals(that." + name + ")";
+      unequal = "!this." + generate_getter(*m_iter) + ".equals(that." + generate_getter(*m_iter) + ")";
     } else {
-      unequal = "this." + name + " != that." + name;
+      unequal = "this." + generate_getter(*m_iter) + " != that." + generate_getter(*m_iter);
     }
 
     out << indent() << "if (" << unequal << ")" << endl << indent() << "  return false;" << endl;
@@ -2096,26 +2093,26 @@ void t_java_generator::generate_java_struct_equality(ostream& out, t_struct* tst
     }
 
     if (t->is_enum()) {
-      indent(out) << "hashCode = hashCode * " << MUL << " + " << name << ".getValue();" << endl;
+      indent(out) << "hashCode = hashCode * " << MUL << " + " << generate_getter(*m_iter) << ".getValue();" << endl;
     } else if (t->is_base_type()) {
       switch(((t_base_type*)t)->get_base()) {
       case t_base_type::TYPE_STRING:
-        indent(out) << "hashCode = hashCode * " << MUL << " + " << name << ".hashCode();" << endl;
+        indent(out) << "hashCode = hashCode * " << MUL << " + " << generate_getter(*m_iter) << ".hashCode();" << endl;
         break;
       case t_base_type::TYPE_BOOL:
-        indent(out) << "hashCode = hashCode * " << MUL << " + ((" << name << ") ? "
+        indent(out) << "hashCode = hashCode * " << MUL << " + ((" << generate_getter(*m_iter) << ") ? "
                     << B_YES << " : " << B_NO << ");" << endl;
         break;
       case t_base_type::TYPE_I8:
-        indent(out) << "hashCode = hashCode * " << MUL << " + (int) (" << name << ");" << endl;
+        indent(out) << "hashCode = hashCode * " << MUL << " + (int) (" << generate_getter(*m_iter) << ");" << endl;
         break;
       case t_base_type::TYPE_I16:
       case t_base_type::TYPE_I32:
-        indent(out) << "hashCode = hashCode * " << MUL << " + " << name << ";" << endl;
+        indent(out) << "hashCode = hashCode * " << MUL << " + " << generate_getter(*m_iter) << ";" << endl;
         break;
       case t_base_type::TYPE_I64:
       case t_base_type::TYPE_DOUBLE:
-        indent(out) << "hashCode = hashCode * " << MUL << " + org.apache.thrift.TBaseHelper.hashCode(" << name << ");" << endl;
+        indent(out) << "hashCode = hashCode * " << MUL << " + org.apache.thrift.TBaseHelper.hashCode(" << generate_getter(*m_iter) << ");" << endl;
         break;
       case t_base_type::TYPE_VOID:
         throw std::logic_error("compiler error: a struct field cannot be void");
@@ -2124,7 +2121,7 @@ void t_java_generator::generate_java_struct_equality(ostream& out, t_struct* tst
                t_base_type::t_base_name(((t_base_type*)t)->get_base()));
       }
     } else {
-      indent(out) << "hashCode = hashCode * " << MUL << " + " << name << ".hashCode();" << endl;
+      indent(out) << "hashCode = hashCode * " << MUL << " + " << generate_getter(*m_iter) << ".hashCode();" << endl;
     }
 
     if (is_optional || can_be_null) {
@@ -2163,7 +2160,7 @@ void t_java_generator::generate_java_struct_compare_to(ostream& out, t_struct* t
 
     indent(out) << "if (" << generate_isset_check(field) << ") {" << endl;
     indent(out) << "  lastComparison = org.apache.thrift.TBaseHelper.compareTo(this."
-                << field->get_name() << ", other." << field->get_name() << ");" << endl;
+                << generate_getter(field) << ", other." << generate_getter(field) << ");" << endl;
     indent(out) << "  if (lastComparison != 0) {" << endl;
     indent(out) << "    return lastComparison;" << endl;
     indent(out) << "  }" << endl;
@@ -2228,8 +2225,8 @@ void t_java_generator::generate_java_validator(ostream& out, t_struct* tstruct) 
   for (f_iter = fields.begin(); f_iter != fields.end(); ++f_iter) {
     t_type* type = (*f_iter)->get_type();
     if (type->is_struct() && !((t_struct*)type)->is_union()) {
-      out << indent() << "if (" << (*f_iter)->get_name() << " != null) {" << endl;
-      out << indent() << "  " << (*f_iter)->get_name() << ".validate();" << endl;
+      out << indent() << "if (" << generate_isset_check(*f_iter) << ") {" << endl;
+      out << indent() << "  " << generate_getter(*f_iter) << ".validate();" << endl;
       out << indent() << "}" << endl;
     }
   }
@@ -2436,8 +2433,9 @@ void t_java_generator::generate_java_bean_boilerplate(ostream& out, t_struct* ts
         out << get_cap_name("size() {") << endl;
 
         indent_up();
-        indent(out) << "return (this." << field_name << " == null) ? 0 : "
-                    << "this." << field_name << ".size();" << endl;
+        indent(out) << "final " << type_name(type) << " _" << field_name << " = " << generate_getter(field)  << ";" << endl;
+        indent(out) << "return (_" << field_name << " == null) ? 0 : "
+                    << "_" << field_name << ".size();" << endl;
         indent_down();
         indent(out) << "}" << endl << endl;
       }
@@ -2496,17 +2494,18 @@ void t_java_generator::generate_java_bean_boilerplate(ostream& out, t_struct* ts
       out << cap_name << "(" << type_name(element_type) << " elem) {" << endl;
 
       indent_up();
-      indent(out) << "if (this." << field_name << " == null) {" << endl;
+      indent(out) << "if (!this." << generate_isset_check(field) << ") {" << endl;
       indent_up();
-      indent(out) << "this." << field_name;
+      indent(out) << "this.set" << get_cap_name(field_name) << "(";
       if (is_enum_set(type)) {
-        out << " = " << type_name(type, false, true, true) << ".noneOf(" << inner_enum_type_name(type) << ");" << endl;
+        out << type_name(type, false, true, true) << ".noneOf(" << inner_enum_type_name(type) << ")";
       } else {
-        out << " = new " << type_name(type, false, true) << "();" << endl;
+        out << "new " << type_name(type, false, true) << "()";
       }
+      out << ");" << endl;
       indent_down();
       indent(out) << "}" << endl;
-      indent(out) << "this." << field_name << ".add(elem);" << endl;
+      indent(out) << "this." << generate_getter(field) << ".add(elem);" << endl;
       indent_down();
       indent(out) << "}" << endl << endl;
     } else if (type->is_map()) {
@@ -2540,101 +2539,56 @@ void t_java_generator::generate_java_bean_boilerplate(ostream& out, t_struct* ts
     // Simple getter
     generate_java_doc(out, field);
     generate_java_ann_doc(out, field);
-    if (type->is_binary()) {
+    
+    if (optional) {
       if (is_deprecated) {
         indent(out) << "@Deprecated" << endl;
       }
-      indent(out) << "public byte[] get" << cap_name << "() {" << endl;
-
-      indent(out) << "  set" << cap_name << "(org.apache.thrift.TBaseHelper.rightSize("
-                  << field_name << "));" << endl;
-      indent(out) << "  return " << field_name << " == null ? null : " << field_name << ".array();"
-                  << endl;
-      indent(out) << "}" << endl << endl;
-
-      indent(out) << "public java.nio.ByteBuffer buffer" << get_cap_name("for") << cap_name << "() {"
-                  << endl;
-      if(unsafe_binaries_){
-        indent(out) << "  return " << field_name << ";"
-                    << endl;
-      }else {
-        indent(out) << "  return org.apache.thrift.TBaseHelper.copyBinary(" << field_name << ");"
-                    << endl;
+      indent(out) << "public org.apache.thrift.Option<" << type_name(type, true) << ">";
+      if (type->is_base_type() && ((t_base_type*)type)->get_base() == t_base_type::TYPE_BOOL) {
+        out << " is";
+      } else {
+        out << " get";
       }
+      out << cap_name << "() {" << endl;
+      indent_up();
+
+      indent(out) << "if (this.isSet" << cap_name << "()) {" << endl;
+      indent_up();
+      indent(out) << "return org.apache.thrift.Option.some(this." << field_name << ");" << endl;
+      indent_down();
+      indent(out) << "} else {" << endl;
+      indent_up();
+      indent(out) << "return org.apache.thrift.Option.none();" << endl;
+      indent_down();
+      indent(out) << "}" << endl;
+      indent_down();
       indent(out) << "}" << endl << endl;
     } else {
-      if (optional) {
-        if (is_deprecated) {
-          indent(out) << "@Deprecated" << endl;
-        }
-        indent(out) << "public org.apache.thrift.Option<" << type_name(type, true) << ">";
-        if (type->is_base_type() && ((t_base_type*)type)->get_base() == t_base_type::TYPE_BOOL) {
-          out << " is";
-        } else {
-          out << " get";
-        }
-        out << cap_name << "() {" << endl;
-        indent_up();
-
-        indent(out) << "if (this.isSet" << cap_name << "()) {" << endl;
-        indent_up();
-        indent(out) << "return org.apache.thrift.Option.some(this." << field_name << ");" << endl;
-        indent_down();
-        indent(out) << "} else {" << endl;
-        indent_up();
-        indent(out) << "return org.apache.thrift.Option.none();" << endl;
-        indent_down();
-        indent(out) << "}" << endl;
-        indent_down();
-        indent(out) << "}" << endl << endl;
-      } else {
-        if (is_deprecated) {
-          indent(out) << "@Deprecated" << endl;
-        }
-        if (type_can_be_null(type)) {
-          indent(out) << java_nullable_annotation() << endl;
-        }
-        indent(out) << "public " << type_name(type);
-        if (type->is_base_type() && ((t_base_type*)type)->get_base() == t_base_type::TYPE_BOOL) {
-          out << " is";
-        } else {
-          out << " get";
-        }
-        out << cap_name << "() {" << endl;
-        indent_up();
-        indent(out) << "return this." << field_name << ";" << endl;
-        indent_down();
-        indent(out) << "}" << endl << endl;
+      if (is_deprecated) {
+        indent(out) << "@Deprecated" << endl;
       }
+      if (type_can_be_null(type)) {
+        indent(out) << java_nullable_annotation() << endl;
+      }
+      indent(out) << "public " << type_name(type);
+      if (type->is_base_type() && ((t_base_type*)type)->get_base() == t_base_type::TYPE_BOOL) {
+        out << " is";
+      } else {
+        out << " get";
+      }
+      out << cap_name << "() {" << endl;
+      indent_up();
+      indent(out) << "return this." << field_name << ";" << endl;
+      indent_down();
+      indent(out) << "}" << endl << endl;
     }
+    
 
     // Simple setter
     generate_java_doc(out, field);
     generate_java_ann_doc(out, field);
-    if (type->is_binary()) {
-      if (is_deprecated) {
-        indent(out) << "@Deprecated" << endl;
-      }
-      indent(out) << "public ";
-      if (bean_style_) {
-        out << "void";
-      } else {
-        out << type_name(tstruct);
-      }
-      out << " set" << cap_name << "(byte[] " << field_name << ") {" << endl;
-      indent(out) << "  this." << field_name << " = " << field_name << " == null ? (java.nio.ByteBuffer)null";
-
-      if(unsafe_binaries_){
-        indent(out) << " : java.nio.ByteBuffer.wrap(" << field_name << ");" << endl;
-      }else{
-        indent(out) << " : java.nio.ByteBuffer.wrap(" << field_name << ".clone());" << endl;
-      }
-                 
-      if (!bean_style_) {
-        indent(out) << "  return this;" << endl;
-      }
-      indent(out) << "}" << endl << endl;
-    }
+    
     if (is_deprecated) {
       indent(out) << "@Deprecated" << endl;
     }
@@ -2647,13 +2601,7 @@ void t_java_generator::generate_java_bean_boilerplate(ostream& out, t_struct* ts
     out << " set" << cap_name << "(" << (type_can_be_null(type) ? (java_nullable_annotation() + " ") : "")
         << type_name(type) << " " << field_name << ") {" << endl;
     indent_up();
-    indent(out) << "this." << field_name << " = ";
-    if (type->is_binary() && !unsafe_binaries_) {
-      out << "org.apache.thrift.TBaseHelper.copyBinary(" << field_name << ")";
-    } else {
-      out << field_name;
-    }
-    out << ";" << endl;
+    indent(out) << "this." << field_name << " = " << field_name << ";" << endl;
     generate_isset_set(out, field, "");
     if (!bean_style_) {
       indent(out) << "return this;" << endl;
@@ -2669,7 +2617,7 @@ void t_java_generator::generate_java_bean_boilerplate(ostream& out, t_struct* ts
     indent(out) << "public void unset" << cap_name << "() {" << endl;
     indent_up();
     if (type_can_be_null(type)) {
-      indent(out) << "this." << field_name << " = null;" << endl;
+      indent(out) << "this.set" <<  get_cap_name(field_name) << "(null);" << endl;
     } else if (issetType == ISSET_PRIMITIVE) {
       indent(out) << "__isset_bitfield = org.apache.thrift.EncodingUtils.clearBit(__isset_bitfield, "
                   << isset_field_id(field) << ");" << endl;
@@ -2688,7 +2636,7 @@ void t_java_generator::generate_java_bean_boilerplate(ostream& out, t_struct* ts
     indent(out) << "public boolean is" << get_cap_name("set") << cap_name << "() {" << endl;
     indent_up();
     if (type_can_be_null(type)) {
-      indent(out) << "return this." << field_name << " != null;" << endl;
+      indent(out) << "return this." << generate_getter(field) << " != null;" << endl;
     } else if (issetType == ISSET_PRIMITIVE) {
       indent(out) << "return org.apache.thrift.EncodingUtils.testBit(__isset_bitfield, " << isset_field_id(field)
                   << ");" << endl;
@@ -2706,7 +2654,7 @@ void t_java_generator::generate_java_bean_boilerplate(ostream& out, t_struct* ts
     indent_up();
     if (type_can_be_null(type)) {
       indent(out) << "if (!value) {" << endl;
-      indent(out) << "  this." << field_name << " = null;" << endl;
+      indent(out) << "  this.set" << get_cap_name(field_name) << "(null);" << endl;
       indent(out) << "}" << endl;
     } else if (issetType == ISSET_PRIMITIVE) {
       indent(out) << "__isset_bitfield = org.apache.thrift.EncodingUtils.setBit(__isset_bitfield, "
@@ -2750,25 +2698,25 @@ void t_java_generator::generate_java_struct_tostring(ostream& out, t_struct* tst
     indent(out) << "sb.append(\"" << (*f_iter)->get_name() << ":\");" << endl;
     bool can_be_null = type_can_be_null(field->get_type());
     if (can_be_null) {
-      indent(out) << "if (this." << (*f_iter)->get_name() << " == null) {" << endl;
+      indent(out) << "if (this." << generate_getter(field) << " == null) {" << endl;
       indent(out) << "  sb.append(\"null\");" << endl;
       indent(out) << "} else {" << endl;
       indent_up();
     }
 
     if (get_true_type(field->get_type())->is_binary()) {
-      indent(out) << "org.apache.thrift.TBaseHelper.toString(this." << field->get_name() << ", sb);"
+      indent(out) << "org.apache.thrift.TBaseHelper.toString(java.nio.ByteBuffer.wrap(this." << generate_getter(field) << "), sb);"
                   << endl;
     } else if ((field->get_type()->is_set())
                && (get_true_type(((t_set*)field->get_type())->get_elem_type())->is_binary())) {
-      indent(out) << "org.apache.thrift.TBaseHelper.toString(this." << field->get_name() << ", sb);"
+      indent(out) << "org.apache.thrift.TBaseHelper.toString(this." << generate_getter(field) << ", sb);"
                   << endl;
     } else if ((field->get_type()->is_list())
                && (get_true_type(((t_list*)field->get_type())->get_elem_type())->is_binary())) {
-      indent(out) << "org.apache.thrift.TBaseHelper.toString(this." << field->get_name() << ", sb);"
+      indent(out) << "org.apache.thrift.TBaseHelper.toString(this." << generate_getter(field) << ", sb);"
                   << endl;
     } else {
-      indent(out) << "sb.append(this." << (*f_iter)->get_name() << ");" << endl;
+      indent(out) << "sb.append(this." << generate_getter(field) << ");" << endl;
     }
 
     if (can_be_null) {
@@ -3869,7 +3817,8 @@ void t_java_generator::generate_process_function(t_service* tservice, t_function
 void t_java_generator::generate_deserialize_field(ostream& out,
                                                   t_field* tfield,
                                                   string prefix,
-                                                  bool has_metadata) {
+                                                  bool has_metadata,
+                                                  bool use_setter) {
   t_type* type = get_true_type(tfield->get_type());
 
   if (type->is_void()) {
@@ -3879,11 +3828,16 @@ void t_java_generator::generate_deserialize_field(ostream& out,
   string name = prefix + tfield->get_name();
 
   if (type->is_struct() || type->is_xception()) {
-    generate_deserialize_struct(out, (t_struct*)type, name);
+    generate_deserialize_struct(out, (t_struct*)type, prefix, tfield, use_setter);
   } else if (type->is_container()) {
-    generate_deserialize_container(out, type, name, has_metadata);
+    generate_deserialize_container(out, type, prefix, tfield, has_metadata, use_setter);
   } else if (type->is_base_type()) {
-    indent(out) << name << " = iprot.";
+
+    if (use_setter) {
+      indent(out) << prefix << "set" << get_cap_name(tfield->get_name()) << "(";
+    }else{
+      indent(out) << prefix << tfield->get_name() << " = ";
+    }
 
     t_base_type::t_base tbase = ((t_base_type*)type)->get_base();
     switch (tbase) {
@@ -3892,33 +3846,38 @@ void t_java_generator::generate_deserialize_field(ostream& out,
       break;
     case t_base_type::TYPE_STRING:
       if (type->is_binary()) {
-        out << "readBinary();";
+        out << "org.apache.thrift.TBaseHelper.byteBufferToByteArray(iprot.readBinary())";
       } else {
-        out << "readString();";
+        out << "iprot.readString()";
       }
       break;
     case t_base_type::TYPE_BOOL:
-      out << "readBool();";
+      out << "iprot.readBool()";
       break;
     case t_base_type::TYPE_I8:
-      out << "readByte();";
+      out << "iprot.readByte()";
       break;
     case t_base_type::TYPE_I16:
-      out << "readI16();";
+      out << "iprot.readI16()";
       break;
     case t_base_type::TYPE_I32:
-      out << "readI32();";
+      out << "iprot.readI32()";
       break;
     case t_base_type::TYPE_I64:
-      out << "readI64();";
+      out << "iprot.readI64()";
       break;
     case t_base_type::TYPE_DOUBLE:
-      out << "readDouble();";
+      out << "iprot.readDouble()";
       break;
     default:
       throw "compiler error: no Java name for base type " + t_base_type::t_base_name(tbase);
     }
-    out << endl;
+
+    if (use_setter){
+      out << ");" << endl;
+    }else{
+      out << ";" << endl;
+    }
   } else if (type->is_enum()) {
     indent(out) << name << " = "
                 << type_name(tfield->get_type(), true, false, false, true)
@@ -3935,18 +3894,26 @@ void t_java_generator::generate_deserialize_field(ostream& out,
  */
 void t_java_generator::generate_deserialize_struct(ostream& out,
                                                    t_struct* tstruct,
-                                                   string prefix) {
+                                                   string prefix,
+                                                   t_field* tfield,
+                                                   bool use_setter) {
 
   if (reuse_objects_) {
-    indent(out) << "if (" << prefix << " == null) {" << endl;
-    indent_up();
-  }
-  indent(out) << prefix << " = new " << type_name(tstruct) << "();" << endl;
-  if (reuse_objects_) {
+    indent(out) << "if (" << prefix << tfield->get_name() << " == null) {" << endl;
+    indent_up();  
+    indent(out) << prefix << tfield->get_name() << " = new " << type_name(tstruct) << "();" << endl;  
     indent_down();
     indent(out) << "}" << endl;
+    indent(out) << prefix << tfield->get_name() << ".read(iprot);" << endl;
+  }else if (use_setter){
+    string tmp_field = tmp("_struct");
+    out << indent() << "final " << type_name(tstruct) << " " << tmp_field << " = new " << type_name(tstruct) << "();" << endl;  
+    out << indent() << tmp_field << ".read(iprot);" << endl;
+    out << indent() << prefix << "set" << get_cap_name(tfield->get_name()) << "(" << tmp_field << ");" << endl;
+  }else {
+    indent(out) << prefix << tfield->get_name() << " = new " << type_name(tstruct) << "();" << endl;
+    indent(out) << prefix << tfield->get_name() << ".read(iprot);" << endl;
   }
-  indent(out) << prefix << ".read(iprot);" << endl;
 }
 
 /**
@@ -3955,7 +3922,9 @@ void t_java_generator::generate_deserialize_struct(ostream& out,
 void t_java_generator::generate_deserialize_container(ostream& out,
                                                       t_type* ttype,
                                                       string prefix,
-                                                      bool has_metadata) {
+                                                      t_field* tfield,
+                                                      bool has_metadata,
+                                                      bool use_setter) {
 
   scope_up(out);
 
@@ -4002,15 +3971,12 @@ void t_java_generator::generate_deserialize_container(ostream& out,
     }
   }
 
-  if (reuse_objects_) {
-    indent(out) << "if (" << prefix << " == null) {" << endl;
-    indent_up();
-  }
+  string tmp_field = tmp(tfield->get_name());
 
   if (is_enum_set(ttype)) {
-    out << indent() << prefix << " = " << type_name(ttype, false, true, true) << ".noneOf";
+    out << indent() << "final " << type_name(ttype) << " " << tmp_field << " = " << type_name(ttype, false, true, true) << ".noneOf";
   } else {
-    out << indent() << prefix << " = new " << type_name(ttype, false, true);
+    out << indent() << "final " << type_name(ttype) << " " << tmp_field << " = new " << type_name(ttype, false, true);
   }
 
   // construct the collection correctly i.e. with appropriate size/type
@@ -4024,20 +3990,21 @@ void t_java_generator::generate_deserialize_container(ostream& out,
         << ");" << endl;
   }
 
-  if (reuse_objects_) {
-    indent_down();
-    indent(out) << "}" << endl;
-  }
-
   if (ttype->is_map()) {
-    generate_deserialize_map_element(out, (t_map*)ttype, prefix, obj, has_metadata);
+    generate_deserialize_map_element(out, (t_map*)ttype, tmp_field, obj, has_metadata);
   } else if (ttype->is_set()) {
-    generate_deserialize_set_element(out, (t_set*)ttype, prefix, obj, has_metadata);
+    generate_deserialize_set_element(out, (t_set*)ttype, tmp_field, obj, has_metadata);
   } else if (ttype->is_list()) {
-    generate_deserialize_list_element(out, (t_list*)ttype, prefix, obj, has_metadata);
+    generate_deserialize_list_element(out, (t_list*)ttype, tmp_field, obj, has_metadata);
   }
 
   scope_down(out);
+
+  if (use_setter){
+    indent(out) << prefix << "set" << get_cap_name(tfield->get_name()) << "(" << tmp_field << ");" << endl;
+  }else{
+    indent(out) << prefix << get_cap_name(tfield->get_name()) << " = " << tmp_field << ";" << endl;
+  }
 
   if (has_metadata) {
     // Read container end
@@ -4185,7 +4152,8 @@ void t_java_generator::generate_deserialize_list_element(ostream& out,
 void t_java_generator::generate_serialize_field(ostream& out,
                                                 t_field* tfield,
                                                 string prefix,
-                                                bool has_metadata) {
+                                                bool has_metadata,
+                                                bool use_getter) {
   t_type* type = get_true_type(tfield->get_type());
 
   // Do nothing for void types
@@ -4193,14 +4161,22 @@ void t_java_generator::generate_serialize_field(ostream& out,
     throw "CANNOT GENERATE SERIALIZE CODE FOR void TYPE: " + prefix + tfield->get_name();
   }
 
+  string name;
+
+  if (use_getter){
+    name = prefix + generate_getter(tfield);
+  }else{
+    name = prefix + tfield->get_name();
+  }
+
   if (type->is_struct() || type->is_xception()) {
-    generate_serialize_struct(out, (t_struct*)type, prefix + tfield->get_name());
+    generate_serialize_struct(out, (t_struct*)type, name);
   } else if (type->is_container()) {
-    generate_serialize_container(out, type, prefix + tfield->get_name(), has_metadata);
+    generate_serialize_container(out, type, name, has_metadata);
   } else if (type->is_enum()) {
-    indent(out) << "oprot.writeI32(" << prefix + tfield->get_name() << ".getValue());" << endl;
+    indent(out) << "oprot.writeI32(" << name << ".getValue());" << endl;
   } else if (type->is_base_type()) {
-    string name = prefix + tfield->get_name();
+
     indent(out) << "oprot.";
 
     if (type->is_base_type()) {
@@ -4211,7 +4187,7 @@ void t_java_generator::generate_serialize_field(ostream& out,
         break;
       case t_base_type::TYPE_STRING:
         if (type->is_binary()) {
-          out << "writeBinary(" << name << ");";
+          out << "writeBinary(java.nio.ByteBuffer.wrap(" << name << "));";
         } else {
           out << "writeString(" << name << ");";
         }
@@ -4448,7 +4424,7 @@ string t_java_generator::base_type_name(t_base_type* type, bool in_container) {
     return (in_container ? "Void" : "void");
   case t_base_type::TYPE_STRING:
     if (type->is_binary()) {
-      return "java.nio.ByteBuffer";
+      return "byte[]";
     } else {
       return "java.lang.String";
     }
@@ -4931,7 +4907,7 @@ void t_java_generator::generate_deep_copy_container(ostream& out,
     } else {
       // iterative copy
       if (elem_type->is_binary()) {
-        indent(out) << "java.nio.ByteBuffer temp_binary_element = ";
+        indent(out) << "byte[] temp_binary_element = ";
         generate_deep_copy_non_container(out,
                                          iterator_element_name,
                                          "temp_binary_element",
@@ -4958,7 +4934,7 @@ void t_java_generator::generate_deep_copy_non_container(ostream& out,
   (void)dest_name;
   type = get_true_type(type);
   if (type->is_base_type() || type->is_enum() || type->is_typedef()) {
-    if (type->is_binary()) {
+    if (type->is_binary() && !unsafe_binaries_) {
       out << "org.apache.thrift.TBaseHelper.copyBinary(" << source_name << ")";
     } else {
       // everything else can be copied directly
@@ -5183,15 +5159,11 @@ void t_java_generator::generate_java_struct_clear(std::ostream& out, t_struct* t
 
       } else {
 
-        indent(out) << "this." << field->get_name() << " = null;" << endl;
+        indent(out) << "this.unset" << get_cap_name(field->get_name()) << "();" << endl;
       }
       continue;
     }
 
-    // must be a base type
-    // means it also needs to be explicitly unset
-    indent(out) << "set" << get_cap_name(field->get_name()) << get_cap_name("isSet") << "(false);"
-                << endl;
     t_base_type* base_type = (t_base_type*)t;
 
     switch (base_type->get_base()) {
@@ -5199,17 +5171,23 @@ void t_java_generator::generate_java_struct_clear(std::ostream& out, t_struct* t
     case t_base_type::TYPE_I16:
     case t_base_type::TYPE_I32:
     case t_base_type::TYPE_I64:
-      indent(out) << "this." << field->get_name() << " = 0;" << endl;
+      indent(out) << "this.set" << get_cap_name(field->get_name()) << "(("<< type_name(t) << ")0);" << endl;
       break;
     case t_base_type::TYPE_DOUBLE:
-      indent(out) << "this." << field->get_name() << " = 0.0;" << endl;
+      indent(out) << "this.set" << get_cap_name(field->get_name()) << "(0.0);" << endl;
       break;
     case t_base_type::TYPE_BOOL:
-      indent(out) << "this." << field->get_name() << " = false;" << endl;
+      indent(out) << "this.set" << get_cap_name(field->get_name()) << "(false);" << endl;
       break;
     default:
       throw "unsupported type: " + base_type->get_name() + " for field " + field->get_name();
     }
+
+    // must be a base type
+    // means it also needs to be explicitly unset
+    indent(out) << "set" << get_cap_name(field->get_name()) << get_cap_name("isSet") << "(false);"
+                << endl;
+
   }
   indent_down();
 
@@ -5320,10 +5298,7 @@ void t_java_generator::generate_standard_reader(ostream& out, t_struct* tstruct)
                 << endl;
     indent_up();
 
-    generate_deserialize_field(out, *f_iter, "struct.", true);
-    indent(out) << "struct."
-                << "set" << get_cap_name((*f_iter)->get_name()) << get_cap_name("isSet")
-                << "(true);" << endl;
+    generate_deserialize_field(out, *f_iter, "struct.", true, true);
     indent_down();
     out << indent() << "} else { " << endl << indent()
         << "  org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);" << endl
@@ -5385,18 +5360,11 @@ void t_java_generator::generate_tryload_writer(ostream& out, t_struct* tstruct, 
 
   for (f_iter = fields.begin(); f_iter != fields.end(); ++f_iter) {
     bool null_allowed = type_can_be_null((*f_iter)->get_type());
-    bool try_load = type_useable_for_load_all((*f_iter)->get_type())
-                    || ((*f_iter)->get_type()->is_string()
-                        && !((t_base_type*)(*f_iter)->get_type())->is_binary());
 
     if (null_allowed) {
-      if (try_load) {
-        out << indent() << "final " << type_name((*f_iter)->get_type()) << " _"
-            << (*f_iter)->get_name() << "= struct." << generate_getter((*f_iter)) << ";" << endl;
-        out << indent() << "if ( _" << (*f_iter)->get_name() << " != null) {" << endl;
-      } else {
-        out << indent() << "if (struct." << (*f_iter)->get_name() << " != null) {" << endl;
-      }
+      out << indent() << "final " << type_name((*f_iter)->get_type()) << " _"
+        << (*f_iter)->get_name() << "= struct." << generate_getter((*f_iter)) << ";" << endl;
+      out << indent() << "if ( _" << (*f_iter)->get_name() << " != null) {" << endl;
       indent_up();
     }
 
@@ -5418,7 +5386,7 @@ void t_java_generator::generate_tryload_writer(ostream& out, t_struct* tstruct, 
                 << "_FIELD_DESC);" << endl;
 
     // Write field contents
-    if (try_load) {
+    if (null_allowed) {
       generate_serialize_field(out, *f_iter, "_", true);
     } else if ((*f_iter)->get_type()->is_base_type()
                && !((t_base_type*)(*f_iter)->get_type())->is_binary()) {
@@ -5428,7 +5396,7 @@ void t_java_generator::generate_tryload_writer(ostream& out, t_struct* tstruct, 
       t_field efield((*f_iter)->get_type(), "_" + (*f_iter)->get_name());
       generate_serialize_field(out, &efield, "", false);
     } else {
-      generate_serialize_field(out, *f_iter, "struct.", true);
+      generate_serialize_field(out, *f_iter, "struct.", true, true);
     }
 
     // Write field closer
@@ -5482,7 +5450,7 @@ void t_java_generator::generate_standard_writer(ostream& out, t_struct* tstruct,
                 << "_FIELD_DESC);" << endl;
 
     // Write field contents
-    generate_serialize_field(out, *f_iter, "struct.", true);
+    generate_serialize_field(out, *f_iter, "struct.", true, true);
 
     // Write field closer
     indent(out) << "oprot.writeFieldEnd();" << endl;
@@ -5570,7 +5538,7 @@ void t_java_generator::generate_java_struct_tuple_reader(ostream& out, t_struct*
       optional_count++;
     }
     if ((*f_iter)->get_req() == t_field::T_REQUIRED) {
-      generate_deserialize_field(out, (*f_iter), "struct.", false);
+      generate_deserialize_field(out, (*f_iter), "struct.", false, true);
       indent(out) << "struct.set" << get_cap_name((*f_iter)->get_name()) << get_cap_name("isSet")
                   << "(true);" << endl;
     }
@@ -5583,7 +5551,7 @@ void t_java_generator::generate_java_struct_tuple_reader(ostream& out, t_struct*
           || (*f_iter)->get_req() == t_field::T_OPT_IN_REQ_OUT) {
         indent(out) << "if (incoming.get(" << i << ")) {" << endl;
         indent_up();
-        generate_deserialize_field(out, (*f_iter), "struct.", false);
+        generate_deserialize_field(out, (*f_iter), "struct.", false, true);
         indent(out) << "struct.set" << get_cap_name((*f_iter)->get_name()) << get_cap_name("isSet")
                     << "(true);" << endl;
         indent_down();
@@ -5614,7 +5582,7 @@ void t_java_generator::generate_java_struct_tuple_writer(ostream& out, t_struct*
       has_optional = true;
     }
     if ((*f_iter)->get_req() == t_field::T_REQUIRED) {
-      generate_serialize_field(out, (*f_iter), "struct.", false);
+      generate_serialize_field(out, (*f_iter), "struct.", false, true);
     }
   }
   if (has_optional) {
@@ -5639,7 +5607,7 @@ void t_java_generator::generate_java_struct_tuple_writer(ostream& out, t_struct*
           || (*f_iter)->get_req() == t_field::T_OPT_IN_REQ_OUT) {
         indent(out) << "if (struct." << generate_isset_check(*f_iter) << ") {" << endl;
         indent_up();
-        generate_serialize_field(out, (*f_iter), "struct.", false);
+        generate_serialize_field(out, (*f_iter), "struct.", false, true);
         indent_down();
         indent(out) << "}" << endl;
         j++;
